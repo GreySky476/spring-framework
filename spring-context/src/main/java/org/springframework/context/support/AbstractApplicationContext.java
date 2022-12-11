@@ -515,41 +515,41 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	@Override
 	public void refresh() throws BeansException, IllegalStateException {
 		synchronized (this.startupShutdownMonitor) {
-			// Prepare this context for refreshing.
+			// Prepare this context for refreshing. 准备此上下文以进行刷新。
 			prepareRefresh();
 
-			// Tell the subclass to refresh the internal bean factory.
+			// Tell the subclass to refresh the internal bean factory. 告诉子类刷新内部 Bean 工厂。
 			ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
 
-			// Prepare the bean factory for use in this context.
+			// Prepare the bean factory for use in this context. 准备 Bean 工厂以在此上下文中使用。
 			prepareBeanFactory(beanFactory);
 
 			try {
-				// Allows post-processing of the bean factory in context subclasses.
+				// Allows post-processing of the bean factory in context subclasses.允许在上下文子类中对 Bean 工厂进行后处理。
 				postProcessBeanFactory(beanFactory);
 
-				// Invoke factory processors registered as beans in the context.
+				// Invoke factory processors registered as beans in the context. 调用在上下文中注册为 Bean 的工厂处理器。
 				invokeBeanFactoryPostProcessors(beanFactory);
 
-				// Register bean processors that intercept bean creation.
+				// Register bean processors that intercept bean creation.注册拦截 Bean 创建的 Bean 处理器。
 				registerBeanPostProcessors(beanFactory);
 
-				// Initialize message source for this context.
+				// Initialize message source for this context.初始化此上下文的消息源。
 				initMessageSource();
 
-				// Initialize event multicaster for this context.
+				// Initialize event multicaster for this context.为此上下文初始化事件多播程序。
 				initApplicationEventMulticaster();
 
-				// Initialize other special beans in specific context subclasses.
+				// Initialize other special beans in specific context subclasses. 在特定上下文子类中初始化其他特殊 bean。
 				onRefresh();
 
-				// Check for listener beans and register them.
+				// Check for listener beans and register them.检查侦听器并注册它们。
 				registerListeners();
 
-				// Instantiate all remaining (non-lazy-init) singletons.
+				// Instantiate all remaining (non-lazy-init) singletons. 实例化所有剩余（非惰性初始化）单例。
 				finishBeanFactoryInitialization(beanFactory);
 
-				// Last step: publish corresponding event.
+				// Last step: publish corresponding event.最后一步：发布相应的事件。
 				finishRefresh();
 			}
 
@@ -973,7 +973,9 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	@Override
 	public void close() {
 		synchronized (this.startupShutdownMonitor) {
+			// <1> 调用 doClose() 方法
 			doClose();
+			// <2> 如果我们注册了一个 JVM 关闭钩子，我们现在不再需要它：我们已经显式关闭了上下文。
 			// If we registered a JVM shutdown hook, we don't need it anymore now:
 			// We've already explicitly closed the context.
 			if (this.shutdownHook != null) {
@@ -997,22 +999,25 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	 * @see #registerShutdownHook()
 	 */
 	protected void doClose() {
+		// <1> 通过 CAS 将 closed 设置为 true
+		// 检查是否需要实际的关闭尝试...
 		// Check whether an actual close attempt is necessary...
 		if (this.active.get() && this.closed.compareAndSet(false, true)) {
 			if (logger.isDebugEnabled()) {
 				logger.debug("Closing " + this);
 			}
-
+			// <2> 注销应用程序上下文
 			LiveBeansView.unregisterApplicationContext(this);
 
 			try {
+				// <3> 发布事件，这里发布 ContextClosedEvent
 				// Publish shutdown event.
 				publishEvent(new ContextClosedEvent(this));
 			}
 			catch (Throwable ex) {
 				logger.warn("Exception thrown from ApplicationListener handling ContextClosedEvent", ex);
 			}
-
+			// <4> 停止所有生命周期 bean，以避免在单个销毁期间出现延迟。
 			// Stop all Lifecycle beans, to avoid delays during individual destruction.
 			if (this.lifecycleProcessor != null) {
 				try {
@@ -1022,22 +1027,26 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 					logger.warn("Exception thrown from LifecycleProcessor on context close", ex);
 				}
 			}
-
+			// <5> 销毁上下文的 BeanFactory 中所有缓存的单例。
 			// Destroy all cached singletons in the context's BeanFactory.
 			destroyBeans();
 
+			// <6> 关闭此上下文本身的状态
 			// Close the state of this context itself.
 			closeBeanFactory();
 
+			// <7> 如果子类需要，让他们做一些最后的清理......
 			// Let subclasses do some final clean-up if they wish...
 			onClose();
 
+			// <8> 将本地应用程序侦听器重置为预刷新状态。
 			// Reset local application listeners to pre-refresh state.
 			if (this.earlyApplicationListeners != null) {
 				this.applicationListeners.clear();
 				this.applicationListeners.addAll(this.earlyApplicationListeners);
 			}
 
+			// <9> 切换到非活动状态
 			// Switch to inactive.
 			this.active.set(false);
 		}

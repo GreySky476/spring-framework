@@ -31,7 +31,7 @@ ext {
 
 	aspectjVersion       = "1.9.6"
 	freemarkerVersion    = "2.3.28"
-	groovyVersion        = "2.5.9"
+	groovyVersion        = "3.0.9"
 	hsqldbVersion        = "2.4.1"
 	jackson2Version      = "2.9.9"
 	jettyVersion         = "9.4.31.v20200723"
@@ -92,10 +92,10 @@ configure(allprojects) { project ->
 			["-Xlint:serial", "-Xlint:cast", "-Xlint:classfile", "-Xlint:dep-ann",
 			 "-Xlint:divzero", "-Xlint:empty", "-Xlint:finally", "-Xlint:overrides",
 			 "-Xlint:path", "-Xlint:processing", "-Xlint:static", "-Xlint:try", "-Xlint:-options"]
-
+	// 这里去除 -Werror 选项：把警告当错误
 	compileJava.options*.compilerArgs = commonCompilerArgs +
 			["-Xlint:varargs", "-Xlint:fallthrough", "-Xlint:rawtypes",
-			 "-Xlint:deprecation", "-Xlint:unchecked", "-Werror"]
+			 "-Xlint:deprecation", "-Xlint:unchecked"]
 
 	compileTestJava.options*.compilerArgs = commonCompilerArgs +
 			["-Xlint:-varargs", "-Xlint:-fallthrough", "-Xlint:-rawtypes",

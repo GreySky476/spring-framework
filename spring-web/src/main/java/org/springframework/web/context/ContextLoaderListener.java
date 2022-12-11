@@ -96,6 +96,7 @@ public class ContextLoaderListener extends ContextLoader implements ServletConte
 
 
 	/**
+	 * 初始化根 Web 应用程序上下文。调用父类的 initWebApplicationContext()
 	 * Initialize the root web application context.
 	 */
 	@Override
@@ -105,6 +106,7 @@ public class ContextLoaderListener extends ContextLoader implements ServletConte
 
 
 	/**
+	 * 关闭根 Web 应用程序上下文。调用父类的 contextDestroyed()
 	 * Close the root web application context.
 	 */
 	@Override

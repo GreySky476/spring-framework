@@ -62,12 +62,16 @@ public class ContextLoaderTests {
 
 	@Test
 	public void testContextLoaderListenerWithDefaultContext() {
+		// 模拟 Servlet 容器
 		MockServletContext sc = new MockServletContext("");
 		sc.addInitParameter(ContextLoader.CONFIG_LOCATION_PARAM,
 				"/org/springframework/web/context/WEB-INF/applicationContext.xml " +
 				"/org/springframework/web/context/WEB-INF/context-addition.xml");
+		// Root WebApplicationContext 容器的初始化通过 ContextLoaderListener 实现，在 Servlet 容器启动时，会被 ContextLoaderListener 监听到，
+		// 从而调用 contextInitialized(event) 方法，初始化 Root WebApplicationContext 容器
 		ServletContextListener listener = new ContextLoaderListener();
 		ServletContextEvent event = new ServletContextEvent(sc);
+		// 监听到事件，执行 Context 初始化方法，ContextLoaderListener 实现了 contextInitialized 方法
 		listener.contextInitialized(event);
 		String contextAttr = WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE;
 		WebApplicationContext context = (WebApplicationContext) sc.getAttribute(contextAttr);

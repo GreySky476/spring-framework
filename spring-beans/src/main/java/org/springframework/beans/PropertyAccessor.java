@@ -189,6 +189,10 @@ public interface PropertyAccessor {
 	void setPropertyValues(PropertyValues pvs) throws BeansException;
 
 	/**
+	 * 执行批量更新，更好地控制行为。
+	 * 请注意，执行批处理更新与执行单个更新不同，因为如果遇到 可恢复 的错误（例如类型不匹配，但 不是 无效的字段名称等），则此类的实现将继续更新属性，从而引发包含所有单个错误的 。
+	 * PropertyBatchUpdateException 稍后可以检查此异常以查看所有绑定错误。已成功更新的属性将保持更改状态。
+	 *
 	 * Perform a batch update with more control over behavior.
 	 * <p>Note that performing a batch update differs from performing a single update,
 	 * in that an implementation of this class will continue to update properties

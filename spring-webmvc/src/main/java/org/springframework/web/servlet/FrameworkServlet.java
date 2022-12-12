@@ -310,6 +310,9 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 	}
 
 	/**
+	 * 设置自定义上下文类。此类的类型必须是 WebApplicationContext。
+	 * 使用默认的 FrameworkServlet 实现时，上下文类还必须实现接口
+	 *
 	 * Set a custom context class. This class must be of type
 	 * {@link org.springframework.web.context.WebApplicationContext}.
 	 * <p>When using the default FrameworkServlet implementation,
@@ -808,6 +811,9 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 
 
 	/**
+	 * 在设置了任何 Bean 属性并加载了 WebApplicationContext 之后，将调用此方法。
+	 * 默认实现为空;子类可以重写此方法以执行它们所需的任何初始化
+	 *
 	 * This method will be invoked after any bean properties have been set and
 	 * the WebApplicationContext has been loaded. The default implementation is empty;
 	 * subclasses may override this method to perform any initialization they require.

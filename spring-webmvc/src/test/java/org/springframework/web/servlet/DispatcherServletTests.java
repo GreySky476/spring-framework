@@ -82,15 +82,24 @@ public class DispatcherServletTests {
 
 	@Before
 	public void setUp() throws ServletException {
+		// MockServletConfig 继承 ServletConfig，根据步骤，先初始化 ServletConfig
 		MockServletConfig complexConfig = new MockServletConfig(getServletContext(), "complex");
 		complexConfig.addInitParameter("publishContext", "false");
 		complexConfig.addInitParameter("class", "notWritable");
 		complexConfig.addInitParameter("unknownParam", "someValue");
-
+		// 初始化简单配置的 DispatcherServlet
 		simpleDispatcherServlet = new DispatcherServlet();
+		//
 		simpleDispatcherServlet.setContextClass(SimpleWebApplicationContext.class);
+		// HttpServletBean：负责将 ServletConfig 设置到当前 Servlet 对象
+		/*
+		 1、调用父类 GenericServlet#init 方法，然后初始化将由 HttpServletBean 实现的 init 方法开始初始化
+		 2、HttpServletBean init 方法执行完之后调用 initServletBean 方法，将初始化 Spring Servlet WebApplicationContext 容器的任务
+		 	交由实现了 initServletBean 方法的 FrameworkServlet 处理
+		 */
 		simpleDispatcherServlet.init(servletConfig);
 
+		// 初始化复杂的 DispatcherServlet
 		complexDispatcherServlet = new DispatcherServlet();
 		complexDispatcherServlet.setContextClass(ComplexWebApplicationContext.class);
 		complexDispatcherServlet.setNamespace("test");

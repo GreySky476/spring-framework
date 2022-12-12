@@ -519,3 +519,308 @@ protected void doClose() {
 ```
 -    - <2> 处，如果注册了 JVM 关闭钩子，移除掉 
 ### 容器初始化（二）：Servlet WebApplicationContext 容器
+#### 概述
+- Root WebApplicationContext 是由 ContextLoaderListener 监听到 ServletContextEvent 事件进行后续的初始化
+- Servlet WebApplicationContext 容器的初始化是在 DispatcherServlet 初始化的过程中执行
+- DispatcherServlet 类图
+- ![img_3.png](png%2Fimg_3.png)
+- HttpServletBean，负责将 ServletConfig 设置到当前 Servlet 对象中。
+```java
+// HttpServletBean.java
+
+/**
+ * 其HttpServlet简单扩展将其配置参数（中web.xml标记内的servlet条目）init-param视为 Bean 属性。
+ * 
+ * Simple extension of {@link javax.servlet.http.HttpServlet} which treats
+ * its config parameters ({@code init-param} entries within the
+ * {@code servlet} tag in {@code web.xml}) as bean properties.
+ */
+```
+- FrameworkServlet，负责初始化 Spring Servlet WebApplicationContext 容器
+```java
+// FrameworkServlet.java
+
+/**
+ * Spring Web 框架的基本 servlet。在基于 JavaBean 的整体解决方案中提供与 Spring 应用程序上下文的集成。
+ * 
+ * Base servlet for Spring's web framework. Provides integration with
+ * a Spring application context, in a JavaBean-based overall solution.
+ * 
+ */
+```
+- DispatcherServlet，负责初始化 Spring MVC 的各个组件，以及处理客户端的请求
+```java
+// DispatcherServlet.java
+
+/**
+ * HTTP 请求处理程序控制器的中央调度程序，例如用于 Web UI 控制器或基于 HTTP 的远程服务导出器。
+ * 向注册处理程序发送用于处理 Web 请求，提供方便的映射和异常处理工具。
+ * 
+ * Central dispatcher for HTTP request handlers/controllers, e.g. for web UI controllers
+ * or HTTP-based remote service exporters. Dispatches to registered handlers for processing
+ * a web request, providing convenient mapping and exception handling facilities.
+ */
+```
+#### 调试
+执行 `DispatcherServletTests#configuredDispatcherServlets()`测试方法
+```java
+
+  private final MockServletConfig servletConfig = new MockServletConfig(new MockServletContext(), "simple");
+  
+  private DispatcherServlet simpleDispatcherServlet;
+  
+  private DispatcherServlet complexDispatcherServlet;
+
+    @Before
+	public void setUp() throws ServletException {
+		// MockServletConfig 继承 ServletConfig，根据步骤，先初始化 ServletConfig
+		MockServletConfig complexConfig = new MockServletConfig(getServletContext(), "complex");
+		complexConfig.addInitParameter("publishContext", "false");
+		complexConfig.addInitParameter("class", "notWritable");
+		complexConfig.addInitParameter("unknownParam", "someValue");
+		// 初始化简单配置的 DispatcherServlet
+		simpleDispatcherServlet = new DispatcherServlet();
+		//
+		simpleDispatcherServlet.setContextClass(SimpleWebApplicationContext.class);
+		// HttpServletBean：负责将 ServletConfig 设置到当前 Servlet 对象
+		/*
+		 1、调用父类 GenericServlet#init 方法，然后初始化将由 HttpServletBean 实现的 init 方法开始初始化
+		 2、HttpServletBean init 方法执行完之后调用 initServletBean 方法，将初始化 Spring Servlet WebApplicationContext 容器的任务
+		 	交由实现了 initServletBean 方法的 FrameworkServlet 处理 
+		 */
+		simpleDispatcherServlet.init(servletConfig);
+
+		// 初始化复杂的 DispatcherServlet
+		complexDispatcherServlet = new DispatcherServlet();
+		complexDispatcherServlet.setContextClass(ComplexWebApplicationContext.class);
+		complexDispatcherServlet.setNamespace("test");
+		complexDispatcherServlet.addRequiredProperty("publishContext");
+		complexDispatcherServlet.init(complexConfig);
+	}
+
+  private ServletContext getServletContext() {
+          return servletConfig.getServletContext();
+    }
+
+  @Test
+  public void configuredDispatcherServlets() {
+          assertTrue("Correct namespace",
+          ("simple" + FrameworkServlet.DEFAULT_NAMESPACE_SUFFIX).equals(simpleDispatcherServlet.getNamespace()));
+          assertTrue("Correct attribute", (FrameworkServlet.SERVLET_CONTEXT_PREFIX + "simple").equals(
+          simpleDispatcherServlet.getServletContextAttributeName()));
+          assertTrue("Context published", simpleDispatcherServlet.getWebApplicationContext() ==
+          getServletContext().getAttribute(FrameworkServlet.SERVLET_CONTEXT_PREFIX + "simple"));
+
+          assertTrue("Correct namespace", "test".equals(complexDispatcherServlet.getNamespace()));
+          assertTrue("Correct attribute", (FrameworkServlet.SERVLET_CONTEXT_PREFIX + "complex").equals(
+          complexDispatcherServlet.getServletContextAttributeName()));
+          assertTrue("Context not published",
+          getServletContext().getAttribute(FrameworkServlet.SERVLET_CONTEXT_PREFIX + "complex") == null);
+
+          simpleDispatcherServlet.destroy();
+          complexDispatcherServlet.destroy();
+    }
+```
+#### HttpServletBean
+`spring-webmvc/src/main/java/org/springframework/web/servlet/HttpServletBean.java`，实现了 EnvironmentCapable、EnvironmentAware
+接口，继承 HttpServlet 抽象类，负责将 ServletConfig 集成到 Spring 中。HttpServletBean 本身也是抽象类
+##### 构造方法
+```java
+// HttpServletBean.java
+
+  @Nullable
+  private ConfigurableEnvironment environment;
+  
+  /**
+   * 必须配置的属性的集合
+   */
+  private final Set<String> requiredProperties = new HashSet<>(4);
+```
+- `environment`属性，相关的方法代码
+```java
+// HttpServletBean.java
+
+  /**
+   * 实现自 EnvironmentAware 接口，自动注入
+   */
+    @Override
+	public void setEnvironment(Environment environment) {
+		Assert.isInstanceOf(ConfigurableEnvironment.class, environment, "ConfigurableEnvironment required");
+		this.environment = (ConfigurableEnvironment) environment;
+	}
+
+    /**
+     * 实现自 EnvironmentCapable 接口
+     */
+    @Override
+    public ConfigurableEnvironment getEnvironment() {
+        if (this.environment == null) {
+        this.environment = createEnvironment();
+        }
+        return this.environment;
+        }
+        
+    protected ConfigurableEnvironment createEnvironment() {
+        return new StandardServletEnvironment();
+        }
+```
+- 为什么`environment`属性能自动注入？
+  - EnvironmentAware 接口，具体需要查看 Spring IOC
+- `requiredProperties`属性，必须配置的属性的集合。可通过`#addRequiredProperty(String property)`方法添加
+```java
+    protected final void addRequiredProperty(String property) {
+		this.requiredProperties.add(property);
+	}
+```
+##### init
+`#init()`方法，负责将 ServletConfig 设置到当前 Servlet 对象中
+```java
+// HttpServletBean.java
+
+    @Override
+    public final void init() throws ServletException {
+        // 从初始化参数设置 Bean 属性。
+        // Set bean properties from init parameters.
+        // <1> 解析 <init-param /> 标签，封装到 PropertyValues pvs 中
+        PropertyValues pvs = new ServletConfigPropertyValues(getServletConfig(), this.requiredProperties);
+        if (!pvs.isEmpty()) {
+        try {
+        // <2.1> 将当前这个 Servlet 对象转化成一个 BeanWrapper 对象。从而以 Spring 的方式将 pvs 注入到 BeanWrapper 对象中
+        BeanWrapper bw = PropertyAccessorFactory.forBeanPropertyAccess(this);
+        ResourceLoader resourceLoader = new ServletContextResourceLoader(getServletContext());
+        // <2.2> 注册自定义属性编辑器，一旦碰到 Resource 类型的属性，将会使用 ResourceEditor 解析
+        bw.registerCustomEditor(Resource.class, new ResourceEditor(resourceLoader, getEnvironment()));
+        // <2.3> 空实现，留给子类覆盖
+        initBeanWrapper(bw);
+        // <2.4> 以 Spring 的方式来将 pvs 注入到该 Wrapper 对象中
+        bw.setPropertyValues(pvs, true);
+        }
+        catch (BeansException ex) {
+        if (logger.isErrorEnabled()) {
+        logger.error("Failed to set bean properties on servlet '" + getServletName() + "'", ex);
+        }
+        throw ex;
+        }
+        }
+
+        // 让子类执行它们喜欢的任何初始化。
+        // Let subclasses do whatever initialization they like.
+        // <3> 子类来实现，实现自定义的初始化逻辑。目前有具体的实现
+        initServletBean();
+        }
+```
+- <1> 处，解析 Servlet 配置的 <init-param /> 标签，封装到 PropertyValues 中。
+`ServletConfigPropertyValues`是 `HttpServletBean`的私有静态类，继承自`MutablePropertyValues`
+类，ServletConfig 的 PropertyValues 实现类
+```java
+// HttpServletBean.java
+
+private static class ServletConfigPropertyValues extends MutablePropertyValues {
+
+  /**
+   * 创建新的 ServletConfigPropertyValues
+   *
+   * Create new ServletConfigPropertyValues.
+   * @param config the ServletConfig we'll use to take PropertyValues from
+   * @param requiredProperties set of property names we need, where
+   * we can't accept default values
+   * @throws ServletException if any required properties are missing
+   */
+  public ServletConfigPropertyValues(ServletConfig config, Set<String> requiredProperties)
+          throws ServletException {
+    // 获得缺失的属性的集合
+    Set<String> missingProps = (!CollectionUtils.isEmpty(requiredProperties) ?
+            new HashSet<>(requiredProperties) : null);
+
+    // <1> 遍历 ServletConfig 的初始化参数集合，添加到 ServletConfigPropertyValues 中，并从 missingProps 中移除
+    Enumeration<String> paramNames = config.getInitParameterNames();
+    while (paramNames.hasMoreElements()) {
+      String property = paramNames.nextElement();
+      Object value = config.getInitParameter(property);
+      // 添加到 ServletConfigPropertyValues 中
+      addPropertyValue(new PropertyValue(property, value));
+      // 从 missingProps 中移除
+      if (missingProps != null) {
+        missingProps.remove(property);
+      }
+    }
+
+    // Fail if we are still missing properties.
+    // <2> 如果存在缺失的属性，抛出 ServletException 异常
+    if (!CollectionUtils.isEmpty(missingProps)) {
+      throw new ServletException(
+              "Initialization from ServletConfig for servlet '" + config.getServletName() +
+                      "' failed; the following required properties were missing: " +
+                      StringUtils.collectionToDelimitedString(missingProps, ", "));
+    }
+  }
+}
+```
+-   - 代码简单，实现两方面逻辑：<1> 处，遍历 ServletConfig 的初始化参数集合，添加到 ServletConfigPropertyValues 中
+；<2> 处，判断要求的属性是否齐全，不齐全则排除异常
+- <2.1> 处，将当前的 Servlet 转换成 BeanWrapper 对象。从而以 Spring 方式将 `pvs`
+注入到该 BeanWrapper 对象中。BeanWrapper 是 Spring 提供的一个用来操作 JavaBean 属性的工具，使用它可以直接修改一个对象的属性。
+- <2.2> 处，注册自定以属性编辑器，一旦碰到 Resource 类型属性，将会使用 ResourceEditor 进行解析
+- <2.3> 处，空实现，留给子类覆盖，如下
+```java
+// HttpServletBean.java
+
+/**
+	 * 初始化此 HttpServletBean 的 BeanWrapperper，可能使用自定义编辑器。
+	 * 此默认实现为空。
+	 *
+	 * Initialize the BeanWrapper for this HttpServletBean,
+	 * possibly with custom editors.
+	 * <p>This default implementation is empty.
+	 * @param bw the BeanWrapper to initialize
+	 * @throws BeansException if thrown by BeanWrapper methods
+	 * @see org.springframework.beans.BeanWrapper#registerCustomEditor
+	 */
+	protected void initBeanWrapper(BeanWrapper bw) throws BeansException {
+	}
+```
+-   - 实际上，子类暂时没有实现
+- <2.4> 处，以 Spring 方式来将 `pvs` 注入到 BeanWrapper 对象中，即设置到当前 Servlet 对象中。
+例子：
+```xml
+// web.xml
+
+<servlet>
+    <servlet-name>spring</servlet-name>
+    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+    <init-param>
+        <param-name>contextConfigLocation</param-name>
+        <param-value>/WEB-INF/spring-servlet.xml</param-value>
+    </init-param>
+    <load-on-startup>1</load-on-startup>
+</servlet>
+<servlet-mapping>
+    <servlet-name>spring</servlet-name>
+    <url-pattern>*.do</url-pattern>
+</servlet-mapping>
+```
+-   - 此处配置了`contextConfigLocation`属性，通过 <2.4> 的逻辑，会反射设置到 `FrameworkServlet.contextConfigLocation`属性，代码如下
+```java
+// FrameworkServlet.java
+    // 显式上下文配置位置。
+    /** Explicit context config location. */
+    @Nullable
+    private String contextConfigLocation;
+    
+    public void setContextConfigLocation(@Nullable String contextConfigLocation) {
+        this.contextConfigLocation = contextConfigLocation;
+    }
+```
+-   - 玩的真花，艹
+- <3> 处，调用 `#initServletBean()`，目前 FrameworkServlet 实现该方法
+```java
+// HttpServletBean.java
+
+protected void initServletBean() throws ServletException {
+}
+```
+#### FrameworkServlet
+
+
+
+

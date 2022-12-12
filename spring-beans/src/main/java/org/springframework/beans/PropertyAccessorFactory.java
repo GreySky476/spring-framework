@@ -31,6 +31,8 @@ public final class PropertyAccessorFactory {
 
 
 	/**
+	 * 获取给定目标对象的 BeanWrapper，访问 JavaBeans 样式的属性。
+	 *
 	 * Obtain a BeanWrapper for the given target object,
 	 * accessing properties in JavaBeans style.
 	 * @param target the target object to wrap
